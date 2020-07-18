@@ -7,7 +7,8 @@ use regex::Regex;
 
 use std::collections::BinaryHeap;
 
-#[path = "./state.rs"] mod state;
+#[path = "./state.rs"]
+mod state;
 use state::State;
 
 #[derive(Copy, Clone, PartialEq, Debug)]
@@ -40,6 +41,8 @@ impl Graph {
             .map_while(|line| {
                 let line = line.expect("Unable to read line");
                 coordinate_re.captures(&line).map(|caps| {
+                    // caps[1,2] are safe to unwrap because inside here
+                    // the regex has already been matched
                     (
                         caps[1].parse::<f64>().unwrap(),
                         caps[2].parse::<f64>().unwrap(),
@@ -78,8 +81,13 @@ impl Graph {
 
     pub fn dijkstra(&self, start: usize, goal: usize) -> Vec<usize> {
         let point_count = self.nodes.len();
+        // Stores the current distance value for each node
         let mut dist: Vec<_> = (0..point_count).map(|_| f64::MAX).collect();
+
+        // Stores whether a particular node has been visited
         let mut visited: Vec<_> = (0..point_count).map(|_| false).collect();
+
+        // Stores the predecessor of each node, in case it has been visited
         let mut previous: Vec<Prev> = (0..point_count).map(|_| Prev::Undefined).collect();
 
         let mut heap = BinaryHeap::new();
@@ -118,14 +126,13 @@ impl Graph {
         }
 
         // Collect the path
-        successors(Some(goal), |&current| match previous[current] {
+        let mut path : Vec<_> = successors(Some(goal), |&current| match previous[current] {
             Prev::Node(node) => Some(node),
             Prev::Start => None,
-            _ => None,
+            _ => unreachable!(), // this would mean a node in the path constructed by the Dijkstra algorithm doesn't have a predecessor
         })
-        .collect::<Vec<usize>>()
-        .into_iter()
-        .rev()
-        .collect()
+        .collect();
+        path.reverse();
+        path
     }
 }
