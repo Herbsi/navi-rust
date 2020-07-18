@@ -5,34 +5,11 @@ use std::io::BufReader;
 use itertools::{izip, Itertools};
 use regex::Regex;
 
-use std::cmp::{Eq, Ordering};
 use std::collections::BinaryHeap;
 
-#[derive(Copy, Clone, PartialEq)]
-struct State {
-    cost: f64,
-    position: usize,
-}
+mod state;
 
-impl Eq for State {}
-
-impl Ord for State {
-    fn cmp(&self, other: &State) -> Ordering {
-        // flip the ordering of other and self to turn the heap into a min-heap
-        // the then_with part is necessary to make implementation consistent with PartialEq
-        other
-            .cost
-            .partial_cmp(&self.cost)
-            .unwrap_or(Ordering::Equal)
-            .then_with(|| self.position.cmp(&other.position))
-    }
-}
-
-impl PartialOrd for State {
-    fn partial_cmp(&self, other: &State) -> Option<Ordering> {
-        Some(self.cmp(&other))
-    }
-}
+use state::State;
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 struct Edge {
@@ -83,13 +60,19 @@ impl Graph {
                 caps[2].parse::<usize>().unwrap(),
             );
             let dist = euclidean_distance(coordinates[i], coordinates[j]);
-            nodes[i].push(Edge { cost: dist, node: j });
-            nodes[j].push(Edge { cost: dist, node: i });
+            nodes[i].push(Edge {
+                cost: dist,
+                node: j,
+            });
+            nodes[j].push(Edge {
+                cost: dist,
+                node: i,
+            });
         }
         Ok(Graph { nodes })
     }
 
-    pub fn dijkstra<I>(&self, start: usize, goal: usize) -> Vec<usize> {
+    pub fn dijkstra(&self, start: usize, goal: usize) -> Vec<usize> {
         let mut dist: Vec<_> = (0..self.nodes.len()).map(|_| f64::MAX).collect();
         let mut visited: Vec<_> = (0..self.nodes.len()).map(|_| false).collect();
         let mut previous: Vec<Prev> = (0..self.nodes.len()).map(|_| Prev::Undefined).collect();
@@ -128,6 +111,8 @@ impl Graph {
                     };
                 }
 
+                // Put this at the end so that visited[goal]
+                // and previous[goal] are properly set
                 if next.position == goal {
                     break;
                 }
