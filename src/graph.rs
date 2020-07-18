@@ -1,15 +1,39 @@
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
+use std::iter::successors;
 
-use itertools::{izip, Itertools};
 use regex::Regex;
 
 use std::collections::BinaryHeap;
 
-mod state;
+use std::cmp::{Eq, Ordering};
 
-use state::State;
+#[derive(Copy, Clone, Debug, PartialEq)]
+struct State {
+    cost: f64,
+    position: usize,
+}
+
+impl Eq for State {}
+
+impl Ord for State {
+    fn cmp(&self, other: &State) -> Ordering {
+        // flip the ordering of other and self to turn the heap into a min-heap
+        // the then_with part is necessary to make implementation consistent with PartialEq
+        other
+            .cost
+            .partial_cmp(&self.cost)
+            .unwrap_or(Ordering::Equal)
+            .then_with(|| self.position.cmp(&other.position))
+    }
+}
+
+impl PartialOrd for State {
+    fn partial_cmp(&self, other: &State) -> Option<Ordering> {
+        Some(self.cmp(&other))
+    }
+}
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 struct Edge {
@@ -20,7 +44,7 @@ struct Edge {
 enum Prev {
     Start,
     Undefined,
-    Node(Edge),
+    Node(usize),
 }
 
 #[derive(Default, Debug)]
@@ -48,6 +72,11 @@ impl Graph {
                 })
             })
             .collect();
+
+        fn euclidean_distance((a, b): (f64, f64), (x, y): (f64, f64)) -> f64 {
+            ((x - a) * (x - a) + (y - b) * (y - b)).sqrt()
+        }
+
         let point_count = coordinates.len();
         let mut nodes = vec![vec![]; point_count];
 
@@ -90,11 +119,6 @@ impl Graph {
 
         // Main Dijkstra
         while let Some(State { cost, position }) = heap.pop() {
-            // Already found a better path
-            if cost > dist[position] {
-                continue;
-            }
-
             for edge in &self.nodes[position] {
                 let next = State {
                     cost: cost + edge.cost,
@@ -103,7 +127,7 @@ impl Graph {
 
                 if next.cost < dist[next.position] {
                     dist[next.position] = next.cost;
-                    previous[next.position] = Prev::Node(*edge);
+                    previous[next.position] = Prev::Node(position);
 
                     if !visited[next.position] {
                         heap.push(next);
@@ -113,32 +137,24 @@ impl Graph {
 
                 // Put this at the end so that visited[goal]
                 // and previous[goal] are properly set
-                if next.position == goal {
+                if position == goal {
                     break;
                 }
             }
         }
+        println!("Dijkstra done!");
 
         // Collect the path
-        let mut path = vec![];
-        let mut current = goal;
-        loop {
+        successors(Some(goal), |&current| {
             match previous[current] {
-                Prev::Node(Edge { cost: _, node }) => {
-                    path.push(node);
-                    current = node;
-                }
-                Prev::Start => {
-                    path.push(start);
-                    break;
-                }
-                _ => {}
-            };
-        }
-        path.into_iter().rev().collect()
+                Prev::Node(node) => Some(node),
+                Prev::Start => None,
+                _ => None,
+            }
+        })
+        .collect::<Vec<usize>>()
+        .into_iter()
+        .rev()
+        .collect()
     }
-}
-
-fn euclidean_distance((a, b): (f64, f64), (x, y): (f64, f64)) -> f64 {
-    ((x - a) * (x - a) + (y - b) * (y - b)).sqrt()
 }
