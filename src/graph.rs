@@ -7,33 +7,8 @@ use regex::Regex;
 
 use std::collections::BinaryHeap;
 
-use std::cmp::{Eq, Ordering};
-
-#[derive(Copy, Clone, Debug, PartialEq)]
-struct State {
-    cost: f64,
-    position: usize,
-}
-
-impl Eq for State {}
-
-impl Ord for State {
-    fn cmp(&self, other: &State) -> Ordering {
-        // flip the ordering of other and self to turn the heap into a min-heap
-        // the then_with part is necessary to make implementation consistent with PartialEq
-        other
-            .cost
-            .partial_cmp(&self.cost)
-            .unwrap_or(Ordering::Equal)
-            .then_with(|| self.position.cmp(&other.position))
-    }
-}
-
-impl PartialOrd for State {
-    fn partial_cmp(&self, other: &State) -> Option<Ordering> {
-        Some(self.cmp(&other))
-    }
-}
+#[path = "./state.rs"] mod state;
+use state::State;
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 struct Edge {
@@ -102,9 +77,10 @@ impl Graph {
     }
 
     pub fn dijkstra(&self, start: usize, goal: usize) -> Vec<usize> {
-        let mut dist: Vec<_> = (0..self.nodes.len()).map(|_| f64::MAX).collect();
-        let mut visited: Vec<_> = (0..self.nodes.len()).map(|_| false).collect();
-        let mut previous: Vec<Prev> = (0..self.nodes.len()).map(|_| Prev::Undefined).collect();
+        let point_count = self.nodes.len();
+        let mut dist: Vec<_> = (0..point_count).map(|_| f64::MAX).collect();
+        let mut visited: Vec<_> = (0..point_count).map(|_| false).collect();
+        let mut previous: Vec<Prev> = (0..point_count).map(|_| Prev::Undefined).collect();
 
         let mut heap = BinaryHeap::new();
 
