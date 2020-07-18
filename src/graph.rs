@@ -119,6 +119,10 @@ impl Graph {
 
         // Main Dijkstra
         while let Some(State { cost, position }) = heap.pop() {
+            if position == goal {
+                break;
+            }
+
             for edge in &self.nodes[position] {
                 let next = State {
                     cost: cost + edge.cost,
@@ -134,23 +138,14 @@ impl Graph {
                         visited[next.position] = true;
                     };
                 }
-
-                // Put this at the end so that visited[goal]
-                // and previous[goal] are properly set
-                if position == goal {
-                    break;
-                }
             }
         }
-        println!("Dijkstra done!");
 
         // Collect the path
-        successors(Some(goal), |&current| {
-            match previous[current] {
-                Prev::Node(node) => Some(node),
-                Prev::Start => None,
-                _ => None,
-            }
+        successors(Some(goal), |&current| match previous[current] {
+            Prev::Node(node) => Some(node),
+            Prev::Start => None,
+            _ => None,
         })
         .collect::<Vec<usize>>()
         .into_iter()
