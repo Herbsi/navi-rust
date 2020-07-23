@@ -17,6 +17,7 @@ struct Edge {
     cost: f64,
 }
 
+#[derive(Copy, Clone, Debug)]
 enum Prev {
     Start,
     Undefined,
@@ -82,13 +83,13 @@ impl Graph {
     pub fn dijkstra(&self, start: usize, goal: usize) -> Vec<usize> {
         let point_count = self.nodes.len();
         // Stores the current distance value for each node
-        let mut dist: Vec<_> = (0..point_count).map(|_| f64::MAX).collect();
+        let mut dist = vec![f64::MAX; point_count];
 
         // Stores whether a particular node has been visited
-        let mut visited: Vec<_> = (0..point_count).map(|_| false).collect();
+        let mut visited = vec![false; point_count];
 
         // Stores the predecessor of each node, in case it has been visited
-        let mut previous: Vec<Prev> = (0..point_count).map(|_| Prev::Undefined).collect();
+        let mut previous = vec![Prev::Undefined; point_count];
 
         let mut heap = BinaryHeap::new();
 
