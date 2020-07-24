@@ -1,15 +1,20 @@
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
-use std::iter::successors;
+use std::iter::{once, successors};
+use std::ops::{Index, IndexMut};
 
 use regex::Regex;
 
 use std::collections::BinaryHeap;
 
+use itertools::izip;
+
 #[path = "./state.rs"]
 mod state;
 use state::State;
+
+type Angle = f64;
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 struct Edge {
@@ -26,6 +31,7 @@ enum Prev {
 
 #[derive(Default, Debug)]
 pub struct Graph {
+    coordinates: Vec<(f64, f64)>,
     nodes: Vec<Vec<Edge>>,
 }
 
@@ -52,10 +58,6 @@ impl Graph {
             })
             .collect();
 
-        fn euclidean_distance((a, b): (f64, f64), (x, y): (f64, f64)) -> f64 {
-            ((x - a) * (x - a) + (y - b) * (y - b)).sqrt()
-        }
-
         let point_count = coordinates.len();
         let mut nodes = vec![vec![]; point_count];
 
@@ -67,7 +69,7 @@ impl Graph {
                 caps[1].parse::<usize>().unwrap(),
                 caps[2].parse::<usize>().unwrap(),
             );
-            let dist = euclidean_distance(coordinates[i], coordinates[j]);
+            let dist = Graph::euclidean_distance(coordinates[i], coordinates[j]);
             nodes[i].push(Edge {
                 cost: dist,
                 node: j,
@@ -77,10 +79,10 @@ impl Graph {
                 node: i,
             });
         }
-        Ok(Graph { nodes })
+        Ok(Graph { coordinates, nodes })
     }
 
-    pub fn dijkstra(&self, start: usize, goal: usize) -> Vec<usize> {
+    pub fn dijkstra(&self, start: usize, goal: usize) -> Path {
         let point_count = self.nodes.len();
         // Stores the current distance value for each node
         let mut dist = vec![f64::MAX; point_count];
@@ -127,13 +129,61 @@ impl Graph {
         }
 
         // Collect the path
-        let mut path : Vec<_> = successors(Some(goal), |&current| match previous[current] {
+        let mut path: Vec<_> = successors(Some(goal), |&current| match previous[current] {
             Prev::Node(node) => Some(node),
             Prev::Start => None,
             _ => unreachable!(), // this would mean a node in the path constructed by the Dijkstra algorithm doesn't have a predecessor
         })
         .collect();
         path.reverse();
-        path
+        // TODO this walks along the entire path again, to get the angles at each turn
+        // is there a better way to do it?
+        Path {
+            path: once((path[0], None)) // special case for start
+                .chain(
+                    izip!(path.iter(), path.iter().skip(1), path.iter().skip(2))
+                        .map(|(&from, &at, &to)| (at, Some(self.angle(from, at, to))))
+                        .chain(once((*path.last().unwrap(), None))), // special case for end
+                )
+                .collect(),
+        }
+    }
+
+    fn euclidean_distance((a, b): (f64, f64), (x, y): (f64, f64)) -> f64 {
+        ((x - a) * (x - a) + (y - b) * (y - b)).sqrt()
+    }
+
+    fn angle(&self, from: usize, at: usize, to: usize) -> Angle {
+        let from = self.coordinates[from];
+        let at = self.coordinates[at];
+        let to = self.coordinates[to];
+        let from_at = (at.0 - from.0, at.1 - from.1);
+        let at_to = (to.0 - at.0, to.1 - at.1);
+
+        ((from_at.0 * at_to.0 + from_at.1 * at_to.1)
+            / Graph::euclidean_distance(from, at)
+            / Graph::euclidean_distance(at, to))
+        .acos()
+            * 180.0
+            / std::f64::consts::PI
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct Path {
+    path: Vec<(usize, Option<Angle>)>,
+}
+
+impl Index<usize> for Path {
+    type Output = (usize, Option<Angle>);
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.path[index]
+    }
+}
+
+impl IndexMut<usize> for Path {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        &mut self.path[index]
     }
 }
