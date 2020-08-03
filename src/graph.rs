@@ -1,3 +1,4 @@
+use std::fmt;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
@@ -14,20 +15,13 @@ use itertools::izip;
 mod state;
 use state::State;
 
-type Angle = f64;
+#[path = "./utils.rs"]
+mod utils;
+use utils::*;
 
-#[derive(Copy, Clone, PartialEq, Debug)]
-struct Edge {
-    node: usize,
-    cost: f64,
-}
-
-#[derive(Copy, Clone, Debug)]
-enum Prev {
-    Start,
-    Undefined,
-    Node(usize),
-}
+///////////////////////////////////////////////////////////////////////////////
+//                                   Graph                                   //
+///////////////////////////////////////////////////////////////////////////////
 
 #[derive(Default, Debug)]
 pub struct Graph {
@@ -138,15 +132,14 @@ impl Graph {
         path.reverse();
         // TODO this walks along the entire path again, to get the angles at each turn
         // is there a better way to do it?
-        Path {
-            path: once((path[0], None)) // special case for start
-                .chain(
-                    izip!(path.iter(), path.iter().skip(1), path.iter().skip(2))
-                        .map(|(&from, &at, &to)| (at, Some(self.angle(from, at, to))))
-                        .chain(once((*path.last().unwrap(), None))), // special case for end
-                )
-                .collect(),
-        }
+        let angles = once(Angle::Straight) // special case for start
+            .chain(
+                izip!(path.iter(), path.iter().skip(1), path.iter().skip(2))
+                    .map(|(&from, &at, &to)| self.angle(from, at, to)),
+            )
+            .chain(once(Angle::Straight)) // special case for end
+            .collect();
+        Path { path, angles }
     }
 
     fn euclidean_distance((a, b): (f64, f64), (x, y): (f64, f64)) -> f64 {
@@ -160,22 +153,31 @@ impl Graph {
         let from_at = (at.0 - from.0, at.1 - from.1);
         let at_to = (to.0 - at.0, to.1 - at.1);
 
-        ((from_at.0 * at_to.0 + from_at.1 * at_to.1)
+        let angle = ((from_at.0 * at_to.0 + from_at.1 * at_to.1)
             / Graph::euclidean_distance(from, at)
             / Graph::euclidean_distance(at, to))
         .acos()
             * 180.0
-            / std::f64::consts::PI
+            / std::f64::consts::PI;
+        if angle.abs() < 10.0 {
+            Angle::Straight
+        } else {
+            // https://math.stackexchange.com/questions/555198/find-direction-of-angle-between-2-vectors
+            // delta > 0 means turning right
+            let delta = -from_at.0 * at_to.1 + from_at.1 * at_to.0;
+            Angle::Turn(angle, Direction::from(delta > 0.0))
+        }
     }
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct Path {
-    path: Vec<(usize, Option<Angle>)>,
+    path: Vec<usize>,
+    angles: Vec<Angle>,
 }
 
 impl Index<usize> for Path {
-    type Output = (usize, Option<Angle>);
+    type Output = usize;
 
     fn index(&self, index: usize) -> &Self::Output {
         &self.path[index]
@@ -185,5 +187,17 @@ impl Index<usize> for Path {
 impl IndexMut<usize> for Path {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         &mut self.path[index]
+    }
+}
+
+impl fmt::Display for Path {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut output = format!("{:^5}|{:^14}\n", "Node", "Go");
+        output.push_str(&"=".repeat(5 + 1 + 14));
+        output.push_str("\n");
+        for (node, angle) in izip!(self.path.iter(), self.angles.iter()) {
+            output.push_str(&format!("{:^5}|{:<14}\n", node, angle));
+        }
+        write!(f, "{}", output)
     }
 }
